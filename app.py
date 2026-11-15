@@ -377,5 +377,16 @@ if diagnosis_results:
 
 else:
 
-    st.info("Select symptoms and click Analyze Symptoms to view results.")
+    if st.session_state.get("analysis_completed", False):
 
+        st.warning(
+            "No conditions matched the selected symptoms. "
+            "Try selecting additional symptoms that may satisfy "
+            "the knowledge-based rules."
+        )
+
+    else:
+
+        st.info(
+            "Select symptoms and click Analyze Symptoms to view results."
+        )
