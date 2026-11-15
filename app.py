@@ -216,7 +216,7 @@ st.markdown("---")
 
 # ---------------- PATIENT ASSESSMENT SUMMARY ----------------
 
-diagnosis_results = st.session_state.get("diagnosis_results", [])
+diagnosis_results = st.session_state.get("diagnosis_results") or []
 
 conditions_count = len(diagnosis_results)
 
@@ -327,7 +327,7 @@ if diagnose_button:
 
     else:
 
-        results = diagnose(selected_symptoms)
+        results = diagnose(selected_symptoms) or []
 
         # Store results in session state
         st.session_state["diagnosis_results"] = results
