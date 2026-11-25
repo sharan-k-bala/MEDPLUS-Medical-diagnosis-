@@ -1,7 +1,7 @@
 
 import streamlit as st
 from inference_engine import diagnose
-from remedial_tips import get_tips
+from supabase_client import get_remedial_tips
 
 # ---------------- PAGE CONFIGURATION ----------------
 
@@ -19,65 +19,123 @@ if "analysis_completed" not in st.session_state:
     st.session_state["analysis_completed"] = False
 # ---------------- CUSTOM CSS ----------------
 
+
 st.markdown("""
 <style>
 
-.main {
-    background-color: #f5f8fc;
+@keyframes diagnosisAppear {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
+.st-key-diagnosis_results {
+    animation: diagnosisAppear 0.7s ease-out;
+}
+
+.st-key-diagnosis_results [data-testid="stExpander"] {
+    animation: diagnosisAppear 0.6s ease-out both;
+}
+
+.st-key-diagnosis_results [data-testid="stExpander"]:hover {
+    border-color: #247BA0;
+    box-shadow: 0 5px 18px rgba(36, 123, 160, 0.12);
+}
+
+/* Main content */
 .block-container {
     padding-top: 2rem;
     padding-bottom: 2rem;
+    max-width: 1250px;
 }
 
+/* Headings */
+h1, h2, h3 {
+    color: #16324F;
+    font-weight: 700;
+}
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background-color: #EAF1F8;
+    border-right: 1px solid #D8E3EF;
+}
+
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #16324F !important;
+}
+
+/* Header */
 .header-box {
-    background-color: #e8f3fb;
-    padding: 25px;
-    border-radius: 12px;
-    border-left: 6px solid #247ba0;
+    background: linear-gradient(135deg, #16324F, #247BA0);
+    padding: 28px;
+    border-radius: 16px;
     margin-bottom: 25px;
+    color: white;
 }
 
-.header-title {
-    color: #164863;
-    font-size: 30px;
-    font-weight: bold;
-}
-
-.header-subtitle {
-    color: #526777;
-    font-size: 15px;
-}
-
-.result-card {
-    background-color: white;
+/* Metric cards */
+[data-testid="stMetric"] {
+    background: white;
     padding: 20px;
+    border-radius: 14px;
+    border: 1px solid #DCE6EF;
+    box-shadow: 0 3px 12px rgba(22, 50, 79, 0.05);
+}
+
+/* Expanders */
+[data-testid="stExpander"] {
+    background: white;
+    border: 1px solid #DCE6EF;
     border-radius: 12px;
-    border: 1px solid #dce6ef;
-    margin-bottom: 15px;
+    margin-bottom: 12px;
 }
 
-.result-title {
-    color: #164863;
-    font-size: 22px;
-    font-weight: bold;
+/* Buttons */
+.stButton > button {
+    background-color: #247BA0;
+    color: white;
+    border: none;
+    border-radius: 9px;
+    padding: 10px 18px;
+    font-weight: 600;
 }
 
-.result-description {
-    color: #526777;
-    font-size: 14px;
+.stButton > button:hover {
+    background-color: #16324F;
+    color: white;
+    border: none;
 }
 
+/* Progress bar */
+.stProgress > div > div > div {
+    background-color: #247BA0;
+}
+
+/* Alerts */
+[data-testid="stAlert"] {
+    border-radius: 10px;
+}
+
+/* Footer */
 .footer {
     text-align: center;
-    color: #7b8794;
+    color: #718096;
     font-size: 13px;
-    padding-top: 25px;
+    padding-top: 30px;
 }
 
 </style>
 """, unsafe_allow_html=True)
+
+
+
 
 # ---------------- HEADER ----------------
 
@@ -104,7 +162,7 @@ st.html(
         </div>
 
         <div>
-            <h1 style="color: white; margin: 0;">MedPlus</h1>
+           <h1 style="color: white; margin: 0;">MedPlus</h1>
             <p style="color: #d7e9f5; margin: 5px 0;">
                 Medical Diagnosis Knowledge Representation System
             </p>
@@ -320,21 +378,16 @@ st.subheader("Diagnosis Results")
 if diagnose_button:
 
     if not selected_symptoms:
-
         st.warning("Please select at least one symptom.")
-
         st.session_state["diagnosis_results"] = []
         st.session_state["analysis_completed"] = False
 
     else:
-
         results = diagnose(selected_symptoms) or []
 
-        # Store results in session state
         st.session_state["diagnosis_results"] = results
         st.session_state["analysis_completed"] = True
 
-        # Refresh the application to update summary metrics
         st.rerun()
 
 
@@ -343,51 +396,65 @@ diagnosis_results = st.session_state.get("diagnosis_results", [])
 
 if diagnosis_results:
 
-    st.subheader(" Analysis Results")
+    with st.container(key="diagnosis_results"):
 
-    for result in diagnosis_results:
+        st.subheader("🩺 Analysis Results")
 
-     with st.expander(
-        f"🔍 {result['disease']} — "
-        f"Symptom Match: {result['score']}%"
-    ):
+        for result in diagnosis_results:
 
-        st.write("### 🧠 AI Reasoning Explanation")
+            with st.expander(
+                f"🔍 {result['disease']} — "
+                f"Symptom Match: {result['score']}%"
+            ):
 
-        st.success("✅ IF–THEN Rule Fired: All rule conditions satisfied.")
+                # Condition Information
+                st.write("### About this condition")
+                st.write(
+                    result.get("description") or
+                    "Description currently unavailable."
+                )
 
-        st.write("**Knowledge-Based Rule:**")
-        st.code(result["rule"])
+                # Matched Symptoms
+                st.write("### Symptoms You Reported")
 
-        st.write("**Conditions Satisfied:**")
+                for symptom in result["matched_symptoms"]:
+                    st.success(
+                        symptom.replace("_", " ").title()
+                    )
 
-        for condition in result.get("matched_rule_conditions", []):
-            st.success(condition.replace("_", " ").title())
+                # Symptom Match
+                st.write("### Symptom Match")
 
-        st.write("**Symptoms Matched:**")
+                st.write(
+                    f"{result['matched_count']} out of "
+                    f"{result['total_symptoms']} associated "
+                    f"symptoms matched."
+                )
 
-        for symptom in result["matched_symptoms"]:
-            st.success(symptom.replace("_", " ").title())
+                st.progress(int(result["score"]))
 
-        st.write(
-            f"**Symptom Match:** {result['matched_count']} "
-            f"out of {result['total_symptoms']} symptoms"
-        )
+                # Recommended Care
+                st.write("### 💡 Recommended Care")
 
-        st.progress(int(result["score"]))
+                tips = get_remedial_tips(result["disease_id"])
 
-        st.write("### 💡 Recommended Care")
+                if tips:
+                    for tip in tips:
+                        st.info(tip)
+                else:
+                    st.warning("No recommendations available.")
 
-        for tip in get_tips(result["disease"]):
-            st.info(tip)
+                
+
+elif st.session_state.get("analysis_completed", False):
+
+    st.warning(
+        "No conditions matched the selected symptoms. "
+        "Try selecting additional symptoms."
+    )
 
 else:
-     if st.session_state.get("analysis_completed", False):
-        st.warning(
-            "No conditions matched the selected symptoms. "
-            "Try selecting additional symptoms."
-        )
-     else:
-        st.info(
-            "Select symptoms and click Analyze Symptoms to view results."
-         )
+
+    st.info(
+        "Select symptoms and click Analyze Symptoms to view results."
+    )

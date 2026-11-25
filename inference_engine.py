@@ -1,140 +1,105 @@
 
 # ==========================================================
 # MedPlus - AI Forward Chaining Inference Engine
-# AI Microproject | Team 8 | Project No. 25
+# Knowledge Base: Supabase Cloud Database
 # ==========================================================
 
-from medical_database import KNOWLEDGE_BASE
+from supabase_client import get_knowledge_base
 
 
 def evaluate_rule(rule, known_facts):
-    """
-    Evaluates an IF-THEN rule using partial matching.
-    Returns matched and missing conditions.
-    """
 
     if "IF" not in rule or "THEN" not in rule:
         return False, [], []
 
     condition_part = rule.split("IF", 1)[1].split("THEN", 1)[0]
 
-    required_conditions = [
-        condition.strip()
-        for condition in condition_part.split("AND")
-        if condition.strip()
+    required = [
+        c.strip()
+        for c in condition_part.split("AND")
+        if c.strip()
     ]
 
-    matched_conditions = [
-        condition
-        for condition in required_conditions
-        if condition in known_facts
-    ]
+    matched = [c for c in required if c in known_facts]
+    missing = [c for c in required if c not in known_facts]
 
-    missing_conditions = [
-        condition
-        for condition in required_conditions
-        if condition not in known_facts
-    ]
+    fired = bool(required) and len(matched) == len(required)
 
-    # Rule fires when all conditions are satisfied
-    rule_fired = (
-        len(required_conditions) > 0
-        and len(matched_conditions) == len(required_conditions)
-    )
-
-    return rule_fired, matched_conditions, missing_conditions
+    return fired, matched, missing
 
 
 def forward_chaining(selected_symptoms):
-    """
-    Applies forward chaining to patient symptom facts.
-    Records fully fired rules and partially matched rules.
-    """
 
+    knowledge_base = get_knowledge_base()
     known_facts = set(selected_symptoms)
+    inferred = []
 
-    inferred_conditions = []
-
-    for disease, details in KNOWLEDGE_BASE.items():
+    for disease, details in knowledge_base.items():
 
         rule = details.get("rule", "")
 
-        rule_fired, matched_conditions, missing_conditions = (
-            evaluate_rule(rule, known_facts)
+        fired, matched, missing = evaluate_rule(
+            rule, known_facts
         )
 
         disease_symptoms = set(details["symptoms"])
+        symptom_matches = disease_symptoms.intersection(known_facts)
 
-        symptom_matches = disease_symptoms.intersection(
-            known_facts
-        )
-
-        # Include conditions with at least one symptom match
         if symptom_matches:
 
-            # Fully satisfied rules infer the condition
-            if rule_fired:
+            if fired:
                 known_facts.add(disease)
 
-            inferred_conditions.append({
+            inferred.append({
                 "disease": disease,
+                "disease_id": details["id"],
                 "rule": rule,
-                "rule_fired": rule_fired,
-                "matched_rule_conditions": matched_conditions,
-                "missing_rule_conditions": missing_conditions,
+                "rule_fired": fired,
+                "matched_rule_conditions": matched,
+                "missing_rule_conditions": missing,
                 "matched_symptoms": sorted(symptom_matches),
                 "matched_count": len(symptom_matches),
                 "total_symptoms": len(disease_symptoms)
             })
 
-    return inferred_conditions
+    return inferred
 
 
 def diagnose(selected_symptoms):
 
     results = []
 
-    # Execute forward chaining
     inferred_conditions = forward_chaining(selected_symptoms)
 
-    # Generate explainable results
-    for inferred in inferred_conditions:
+    knowledge_base = get_knowledge_base()
 
-        disease = inferred["disease"]
+    for item in inferred_conditions:
 
-        details = KNOWLEDGE_BASE[disease]
+        disease = item["disease"]
+        details = knowledge_base[disease]
 
-        matched_count = inferred["matched_count"]
-        total_symptoms = inferred["total_symptoms"]
+        matched = item["matched_count"]
+        total = item["total_symptoms"]
 
-        if total_symptoms > 0:
-            score = (matched_count / total_symptoms) * 100
-        else:
-            score = 0
+        score = (matched / total * 100) if total else 0
 
         results.append({
             "disease": disease,
+            "disease_id": item["disease_id"],
             "score": round(score, 2),
-            "matched_symptoms": inferred["matched_symptoms"],
-            "description": details.get(
-                "description",
-                "No description available."
-            ),
-            "rule": inferred["rule"],
-            "matched_count": matched_count,
-            "total_symptoms": total_symptoms,
-            "rule_fired": inferred["rule_fired"],
-            "matched_rule_conditions": inferred[
-                "matched_rule_conditions"
-            ],
-            "missing_rule_conditions": inferred[
-                "missing_rule_conditions"
-            ]
+            "matched_symptoms": item["matched_symptoms"],
+            "description": details["description"],
+            "rule": item["rule"],
+            "matched_count": matched,
+            "total_symptoms": total,
+            "rule_fired": item["rule_fired"],
+            "matched_rule_conditions": item["matched_rule_conditions"],
+            "missing_rule_conditions": item["missing_rule_conditions"]
         })
 
-    # Rank possible conditions by symptom match score
+    # Prioritise fully satisfied rules, then symptom match
     results.sort(
-        key=lambda result: result["score"],
+        key=lambda x: (x["rule_fired"], x["score"]),
         reverse=True
     )
 
