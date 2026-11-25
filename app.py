@@ -1,6 +1,7 @@
 
 import streamlit as st
 from inference_engine import diagnose
+from remedial_tips import get_tips
 
 # ---------------- PAGE CONFIGURATION ----------------
 
@@ -342,51 +343,51 @@ diagnosis_results = st.session_state.get("diagnosis_results", [])
 
 if diagnosis_results:
 
-    st.subheader("🩺 Analysis Results")
+    st.subheader(" Analysis Results")
 
     for result in diagnosis_results:
 
-        with st.expander(
-            f"🔍 {result['disease']} — "
-            f"Symptom Match: {result['score']}%"
-        ):
+     with st.expander(
+        f"🔍 {result['disease']} — "
+        f"Symptom Match: {result['score']}%"
+    ):
 
-            st.write("### 🧠 AI Reasoning Explanation")
+        st.write("### 🧠 AI Reasoning Explanation")
 
-            st.success("✅ IF–THEN Rule Fired: All rule conditions satisfied.")
+        st.success("✅ IF–THEN Rule Fired: All rule conditions satisfied.")
 
-            st.write("**Knowledge-Based Rule:**")
-            st.code(result["rule"])
+        st.write("**Knowledge-Based Rule:**")
+        st.code(result["rule"])
 
-            st.write("**Conditions Satisfied:**")
+        st.write("**Conditions Satisfied:**")
 
-            for condition in result.get("matched_rule_conditions", []):
-                st.success(condition.replace("_", " ").title())
+        for condition in result.get("matched_rule_conditions", []):
+            st.success(condition.replace("_", " ").title())
 
-            st.write("**Symptoms Matched:**")
+        st.write("**Symptoms Matched:**")
 
-            for symptom in result["matched_symptoms"]:
-                st.success(symptom.replace("_", " ").title())
+        for symptom in result["matched_symptoms"]:
+            st.success(symptom.replace("_", " ").title())
 
-            st.write(
-                f"**Symptom Match:** {result['matched_count']} "
-                f"out of {result['total_symptoms']} symptoms"
-            )
+        st.write(
+            f"**Symptom Match:** {result['matched_count']} "
+            f"out of {result['total_symptoms']} symptoms"
+        )
 
-            st.progress(int(result["score"]))
+        st.progress(int(result["score"]))
+
+        st.write("### 💡 Recommended Care")
+
+        for tip in get_tips(result["disease"]):
+            st.info(tip)
 
 else:
-
-    if st.session_state.get("analysis_completed", False):
-
+     if st.session_state.get("analysis_completed", False):
         st.warning(
             "No conditions matched the selected symptoms. "
-            "Try selecting additional symptoms that may satisfy "
-            "the knowledge-based rules."
+            "Try selecting additional symptoms."
         )
-
-    else:
-
+     else:
         st.info(
             "Select symptoms and click Analyze Symptoms to view results."
-        )
+         )
