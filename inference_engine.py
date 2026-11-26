@@ -65,23 +65,57 @@ def forward_chaining(selected_symptoms):
     return inferred
 
 
+import math
+
+
 def diagnose(selected_symptoms):
 
     results = []
 
     inferred_conditions = forward_chaining(selected_symptoms)
-
     knowledge_base = get_knowledge_base()
 
+    total_diseases = len(knowledge_base)
+
+    # Calculate the importance of each symptom
+    symptom_frequency = {}
+
+    for details in knowledge_base.values():
+        for symptom in set(details["symptoms"]):
+            symptom_frequency[symptom] = (
+                symptom_frequency.get(symptom, 0) + 1
+            )
+
+    symptom_weights = {
+        symptom: math.log(
+            (total_diseases + 1) / (frequency + 1)
+        ) + 1
+        for symptom, frequency in symptom_frequency.items()
+    }
+
+    # Calculate weighted scores
     for item in inferred_conditions:
 
         disease = item["disease"]
         details = knowledge_base[disease]
 
-        matched = item["matched_count"]
-        total = item["total_symptoms"]
+        disease_symptoms = set(details["symptoms"])
+        matched_symptoms = set(item["matched_symptoms"])
 
-        score = (matched / total * 100) if total else 0
+        total_weight = sum(
+            symptom_weights[s]
+            for s in disease_symptoms
+        )
+
+        matched_weight = sum(
+            symptom_weights[s]
+            for s in matched_symptoms
+        )
+
+        score = (
+            matched_weight / total_weight * 100
+            if total_weight else 0
+        )
 
         results.append({
             "disease": disease,
@@ -90,14 +124,18 @@ def diagnose(selected_symptoms):
             "matched_symptoms": item["matched_symptoms"],
             "description": details["description"],
             "rule": item["rule"],
-            "matched_count": matched,
-            "total_symptoms": total,
+            "matched_count": item["matched_count"],
+            "total_symptoms": item["total_symptoms"],
             "rule_fired": item["rule_fired"],
-            "matched_rule_conditions": item["matched_rule_conditions"],
-            "missing_rule_conditions": item["missing_rule_conditions"]
+            "matched_rule_conditions": item[
+                "matched_rule_conditions"
+            ],
+            "missing_rule_conditions": item[
+                "missing_rule_conditions"
+            ]
         })
 
-    # Prioritise fully satisfied rules, then symptom match
+    # Rank fully satisfied rules first, then weighted score
     results.sort(
         key=lambda x: (x["rule_fired"], x["score"]),
         reverse=True
